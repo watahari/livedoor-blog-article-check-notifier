@@ -1,6 +1,6 @@
 # livedoor-blog-article-check-notifier
 
-「下書き記事」が追加されるとDiscordに通知するクソスクリプトです。<br>
+「予約記事」が追加されるとDiscordに通知するクソスクリプトです。<br>
 複数人でブログ運営している人におすすめ。
 
 # prepare
