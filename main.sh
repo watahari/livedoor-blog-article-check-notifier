@@ -184,11 +184,15 @@ get_draft_articles ${RESULT_FILE} | sort > ${TMP2}
 
 MESSAGE=""
 create_diff_message ${TMP1} ${TMP2}
-curl -H "Content-Type: application/json" -X POST -d "{\"username\": \"${BOT_NAME}\", \"content\": \"${MESSAGE}\"}" ${DISCORD_URL} >> ${LOG_FILE} 2>&1
-if [ $? -eq 0 ]; then
-  log "--> post discord OK"
+if [ "${MESSAGE}" != "" ]; then
+  curl -H "Content-Type: application/json" -X POST -d "{\"username\": \"${BOT_NAME}\", \"content\": \"${MESSAGE}\"}" ${DISCORD_URL} >> ${LOG_FILE} 2>&1
+  if [ $? -eq 0 ]; then
+    log "--> post discord OK"
+  else
+    revert_finish
+  fi
 else
-  revert_finish
+  log "no diff found"
 fi
 
 cleanup
