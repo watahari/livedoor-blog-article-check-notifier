@@ -196,4 +196,3 @@ else
 fi
 
 cleanup
-exit 0
