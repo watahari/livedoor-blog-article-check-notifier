@@ -3,7 +3,7 @@
 「予約記事」が追加されるとDiscordに通知するクソスクリプトです。<br>
 複数人でブログ運営している人におすすめ。
 
-# prepare
+## Prepare
 
 Edit the variable at the beginning of `main.sh`.
 ```
@@ -13,14 +13,14 @@ Edit the variable at the beginning of `main.sh`.
   DISCORD_URL="<your discord webhook url https://discord.com/api/webhooks/****>"
 ```
 
-# run
+## Run
 
 Operation on raspberry pi and MacOS has been confirmed.
 ```
 bash /path/to/livedoor-blog-article-check-notifier/main.sh
 ```
 
-# run via cron
+## Run via cron
 If you want to check regularly, set cron like
 
 ```
@@ -32,7 +32,7 @@ Recommended to change `APP_PATH` if run script via cron.
 APP_PATH="/path/to/livedoor-blog-article-check-notifier_directory"
 ```
 
-# Disclaim
+## Disclaim
 
 This script is NOT authorized by Livedoor.<br>
 We are not responsible for any damages caused by using this script.

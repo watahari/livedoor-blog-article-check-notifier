@@ -1,6 +1,6 @@
 #!/bin/bash
-# cronで実行する場合、ログ等の出力ファイルはカレントディレクトリに出力される
-# 変更したい場合、APP_PATHを変更してください
+# cronで実行する場合、ログ等の出力ファイルはカレントディレクトリに出力される.
+# 変更したい場合、APP_PATHを変更してください.
 APP_PATH="$(pwd)"
 
 init() {
@@ -8,7 +8,9 @@ init() {
   API_KEY="<your livedoor blog api key>"
   BLOG_NAME="<blog owner livedoor id>"
   DISCORD_URL="<your discord webhook url https://discord.com/api/webhooks/****>"
+
   BOT_NAME="下書き記事見張るくん"
+
   # このログファイルは無限に肥大化するので、適宜logrotateしてください
   LOG_FILE=${APP_PATH}/livedoor-blog-article-check-notifier.log
   LOCK_FILE=${APP_PATH}/livedoor-blog-article-check-notifier.lock
@@ -17,10 +19,12 @@ init() {
   TMP_PREV_FILE=${APP_PATH}/.tmp_prev_result.txt
   TMP1=${APP_PATH}/.1.tmp.txt
   TMP2=${APP_PATH}/.2.tmp.txt
+  TMP3=${APP_PATH}/.3.tmp.txt
+  TMP4=${APP_PATH}/.4.tmp.txt
 
   if [ -e ${LOCK_FILE} ];then
     log "lock found, exit"
-    exit
+    exit 1
   else
     touch ${LOCK_FILE}
     log "START <$$>"
@@ -48,6 +52,12 @@ cleanup() {
   fi
   if [ -e ${TMP2} ]; then
     rm ${TMP2}
+  fi
+  if [ -e ${TMP3} ]; then
+    rm ${TMP3}
+  fi
+  if [ -e ${TMP4} ]; then
+    rm ${TMP4}
   fi
   log "FINISH <$$>"
   log "===================="
@@ -104,64 +114,81 @@ check_data() {
 }
 
 get_draft_articles() {
+  IFS_BACKUP=$IFS
+  IFS=$'\n'
+
   # 注目したい4項目を取り出す
   # 最初の1行は不要なので除去
   # スペース除去
   # 4行ごとに1記事
   # htmlタグ除去
+  # JSTオフセット部分は固定なので除去
   # 最後がyesなのがdraft
   cat ${1} | egrep "<(title|published|author|app:draft)>"  \
            | sed -e '1d' \
            | tr -d ' ' \
            | xargs -n4 \
            | sed -e 's/<[^>]*>//g' \
-           | egrep " yes"
+           | sed -e 's/+09:00//' \
+           | egrep " yes" \
+           > ${TMP3}
+
+  # 過去のdraftは除外する. 現在日時より過去のdraft:yesは「下書き記事」なので、日時チェックの必要がある.
+  # なお、未来日時の「予約記事」と「下書き記事」は見分けられない.
+  NOW_DATETIME=$(date +%Y%m%d%H%M%S)
+  ARRAY=($(cat ${TMP3}))
+  if [ -e ${TMP4} ]; then
+    rm ${TMP4}
+  fi
+  if [ ${#ARRAY[*]} -ne 0 ]; then
+    log "check draft ${1}"""
+    for i in ${ARRAY[@]}; do
+      DATETIME=$(echo ${i} | awk '{print $(NF-2)}' | sed -e 's/://g' -e 's/T//g' -e 's/-//g')
+      if [ ${DATETIME} -gt ${NOW_DATETIME} ]; then
+        log " draft detected : ${i}"
+        # titleとauthorのみ出力する
+        echo "${i}" | awk '{print $1,$3}' >> ${TMP4}
+      fi
+    done
+  fi
+
+  IFS=${IFS_BACKUP}
+
+  if [ -e ${TMP4} ]; then
+    cat ${TMP4}
+  else
+    printf "\r"
+  fi
 }
 
 create_diff_message() {
   IFS_BACKUP=$IFS
   IFS=$'\n'
 
-  # 現在日時より過去のdraft:yesは「予約記事」ではなく「下書き記事」なので、チェックの必要がある
-  NOW_DATETIME=$(date +%Y%m%d%H%M%S)
-
+  # 追加検知
   ADD_DIFF=($(
     diff -u ${1} ${2} | grep ^+ \
                       | grep -v ^+++ \
-                      | sed -e 's/^+//' \
-                      | sed -e 's/ yes$//' \
-                      | sed -e 's/+09:00//'
+                      | sed -e 's/^+//'
   ))
   if [ ${#ADD_DIFF[*]} -ne 0 ]; then
+    MESSAGE=${MESSAGE}"■新しい未来記事が作成されました\r"
     for i in ${ADD_DIFF[@]}; do
-      DATETIME=$(echo ${i} | awk '{print $(NF-1)}' | sed -e 's/://g' -e 's/T//g' -e 's/-//g')
-      if [ ${DATETIME} -gt ${NOW_DATETIME} ]; then
-        log "new : ${i}"
-        MESSAGE=${MESSAGE}"■新しい予約記事を検知しました\r"
-        MESSAGE=${MESSAGE}" -> ${i}\r"
-      else
-        log "not-new (previous draft) : ${i}"
-      fi
+      MESSAGE=${MESSAGE}"${i}\r"
     done
   fi
 
+  # 削除検知
   DEL_DIFF=($(
     diff -u ${1} ${2} | grep ^- \
                       | grep -v ^--- \
-                      | sed -e 's/^-//' \
-                      | sed -e 's/ yes$//' \
-                      | sed -e 's/+09:00//'
+                      | sed -e 's/^-//'
   ))
   if [ ${#DEL_DIFF[*]} -ne 0 ]; then
+    MESSAGE=${MESSAGE}"■未来記事の削除を検知しました\r"
     for i in ${DEL_DIFF[@]}; do
       DATETIME=$(echo ${i} | awk '{print $(NF-1)}' | sed -e 's/://g' -e 's/T//g' -e 's/-//g')
-      if [ ${DATETIME} -gt ${NOW_DATETIME} ]; then
-        log "deleted : ${i}"
-        MESSAGE=${MESSAGE}"■予約記事の削除を検知しました\r"
-        MESSAGE=${MESSAGE}" -> ${i}\r"
-      else
-        log "not-deleted (previous draft) : ${i}"
-      fi
+      MESSAGE=${MESSAGE}"DELETED -> ${i}\r"
     done
   fi
 
