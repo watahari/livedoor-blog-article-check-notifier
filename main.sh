@@ -175,7 +175,7 @@ init
 get_article_api > ${RESULT_FILE}
 if [ $? -ne 0 ]; then
   log "get failed"
-  cleanup
+  revert_finish
 fi
 check_data
 
