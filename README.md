@@ -20,10 +20,16 @@ Operation on raspberry pi and MacOS has been confirmed.
 bash /path/to/livedoor-blog-article-check-notifier/main.sh
 ```
 
+# run via cron
 If you want to check regularly, set cron like
 
 ```
 */5 * * * * bash /path/to/livedoor-blog-article-check-notifier/main.sh
+```
+
+Recommended to change `APP_PATH` if run script via cron.
+```
+APP_PATH="/path/to/livedoor-blog-article-check-notifier_directory"
 ```
 
 # Disclaim

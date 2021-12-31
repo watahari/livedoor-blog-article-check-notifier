@@ -1,4 +1,7 @@
 #!/bin/bash
+# cronで実行する場合、ログ等の出力ファイルはカレントディレクトリに出力される
+# 変更したい場合、APP_PATHを変更してください
+APP_PATH="$(pwd)"
 
 init() {
   USER="<your livedoor id>"
@@ -7,13 +10,13 @@ init() {
   DISCORD_URL="<your discord webhook url https://discord.com/api/webhooks/****>"
   BOT_NAME="下書き記事見張るくん"
   # このログファイルは無限に肥大化するので、適宜logrotateしてください
-  LOG_FILE=./livedoor-blog-article-check-notifier.log
-  LOCK_FILE=./livedoor-blog-article-check-notifier.lock
-  RESULT_FILE=./result.txt
-  PREV_FILE=./prev_result.txt
-  TMP_PREV_FILE=./.tmp_prev_result.txt
-  TMP1=./.1.tmp.txt
-  TMP2=./.2.tmp.txt
+  LOG_FILE=${APP_PATH}/livedoor-blog-article-check-notifier.log
+  LOCK_FILE=${APP_PATH}/livedoor-blog-article-check-notifier.lock
+  RESULT_FILE=${APP_PATH}/result.txt
+  PREV_FILE=${APP_PATH}/prev_result.txt
+  TMP_PREV_FILE=${APP_PATH}/.tmp_prev_result.txt
+  TMP1=${APP_PATH}/.1.tmp.txt
+  TMP2=${APP_PATH}/.2.tmp.txt
 
   if [ -e ${LOCK_FILE} ];then
     log "lock found, exit"
