@@ -16,7 +16,9 @@ init() {
   LOCK_FILE=${APP_PATH}/livedoor-blog-article-check-notifier.lock
   RESULT_FILE=${APP_PATH}/result.txt
   PREV_FILE=${APP_PATH}/prev_result.txt
-  TMP_PREV_FILE=${APP_PATH}/.tmp_prev_result.txt
+  TMP_PREV_FILE=${APP_PATH}/.tmp_prev_result.tmp.txt
+  TMP_DRAFT_NOW=${APP_PATH}/.result_draft.tmp.txt
+  TMP_DRAFT_PREV=${APP_PATH}/.prev_result_draft.tmp.txt
   TMP1=${APP_PATH}/.1.tmp.txt
   TMP2=${APP_PATH}/.2.tmp.txt
   TMP3=${APP_PATH}/.3.tmp.txt
@@ -46,6 +48,12 @@ init() {
 cleanup() {
   if [ -e ${TMP_PREV_FILE} ]; then
     rm ${TMP_PREV_FILE}
+  fi
+  if [ -e ${TMP_DRAFT_NOW} ]; then
+    rm ${TMP_DRAFT_NOW}
+  fi
+  if [ -e ${TMP_DRAFT_PREV} ]; then
+    rm ${TMP_DRAFT_PREV}
   fi
   if [ -e ${TMP1} ]; then
     rm ${TMP1}
@@ -117,28 +125,28 @@ get_draft_articles() {
   IFS_BACKUP=$IFS
   IFS=$'\n'
 
-  # 注目したい4項目を取り出す
-  # 最初の1行は不要なので除去
+  # 注目したい5項目を取り出す
+  # 最初の2行は不要なので除去
   # スペース除去
-  # 4行ごとに1記事
+  # 5行ごとに1記事
   # htmlタグ除去
   # JSTオフセット部分は固定なので除去
   # 最後がyesなのがdraft
-  cat ${1} | egrep "<(title|published|author|app:draft)>"  \
-           | sed -e '1d' \
+  cat ${1} | egrep "<(title|id|published|author|app:draft)>"  \
+           | sed -e '1,2d' \
            | tr -d ' ' \
-           | xargs -n4 \
+           | xargs -n5 \
            | sed -e 's/<[^>]*>//g' \
            | sed -e 's/+09:00//' \
            | egrep " yes" \
-           > ${TMP3}
+           > ${TMP1}
 
   # 過去のdraftは除外する. 現在日時より過去のdraft:yesは「下書き記事」なので、日時チェックの必要がある.
   # なお、未来日時の「予約記事」と「下書き記事」は見分けられない.
   NOW_DATETIME=$(date +%Y%m%d%H%M%S)
-  ARRAY=($(cat ${TMP3}))
-  if [ -e ${TMP4} ]; then
-    rm ${TMP4}
+  ARRAY=($(cat ${TMP1}))
+  if [ -e ${TMP2} ]; then
+    rm ${TMP2}
   fi
   if [ ${#ARRAY[*]} -ne 0 ]; then
     log "check draft ${1}"""
@@ -146,16 +154,16 @@ get_draft_articles() {
       DATETIME=$(echo ${i} | awk '{print $(NF-2)}' | sed -e 's/://g' -e 's/T//g' -e 's/-//g')
       if [ ${DATETIME} -gt ${NOW_DATETIME} ]; then
         log " draft detected : ${i}"
-        # titleとauthorのみ出力する
-        echo "${i}" | awk '{print $1,$3}' >> ${TMP4}
+        # title,id,authorのみ出力する
+        echo "${i}" | awk '{print $1,$2,$4}' >> ${TMP2}
       fi
     done
   fi
 
   IFS=${IFS_BACKUP}
 
-  if [ -e ${TMP4} ]; then
-    cat ${TMP4}
+  if [ -e ${TMP2} ]; then
+    cat ${TMP2}
   else
     printf "\r"
   fi
@@ -165,30 +173,79 @@ create_diff_message() {
   IFS_BACKUP=$IFS
   IFS=$'\n'
 
-  # 追加検知
-  ADD_DIFF=($(
-    diff -u ${1} ${2} | grep ^+ \
-                      | grep -v ^+++ \
-                      | sed -e 's/^+//'
+  # idに注目し、差分を取得する
+  #  => article自体の追加/削除通知に利用する
+  cat ${1} | awk '{print $(NF-1)}' > ${TMP1}
+  cat ${2} | awk '{print $(NF-1)}' > ${TMP2}
+  ID_ADD_DIFF=($(
+    diff -u ${TMP1} ${TMP2} | grep ^+ \
+                            | grep -v ^+++ \
+                            | sed -e 's/^+//'
   ))
-  if [ ${#ADD_DIFF[*]} -ne 0 ]; then
-    MESSAGE=${MESSAGE}"■新しい未来記事が作成されました\r"
-    for i in ${ADD_DIFF[@]}; do
-      MESSAGE=${MESSAGE}"${i}\r"
+  ID_DEL_DIFF=($(
+    diff -u ${TMP1} ${TMP2} | grep ^- \
+                            | grep -v ^--- \
+                            | sed -e 's/^-//'
+  ))
+  # 後ほど使うので、ID_ADD/DEL_DIFFをTMP4に出力しておく
+  rm ${TMP1}
+  if [ ${#ID_ADD_DIFF[*]} -ne 0 ]; then
+    for i in ${ID_ADD_DIFF[@]}; do
+        echo ${i} >> ${TMP1}
     done
+  fi
+  if [ ${#ID_DEL_DIFF[*]} -ne 0 ]; then
+    for i in ${ID_DEL_DIFF[@]}; do
+        echo ${i} >> ${TMP1}
+    done
+  fi
+  cat ${TMP1} | sort > ${TMP4}
+
+  # titleとauthorに注目し、差分を取得する
+  #  => articleのタイトル変更検知に利用する
+  cat ${1} | awk '{print $1,$(NF-1),$(NF)}' > ${TMP1}
+  cat ${2} | awk '{print $1,$(NF-1),$(NF)}' > ${TMP2}
+  diff -u ${TMP1} ${TMP2} | grep ^\[+-\] \
+                          | grep -v ^+++ \
+                          | grep -v ^--- \
+                          | awk '{print $2}' \
+                          | sort \
+                          > ${TMP3}
+  # id差分と突き合わせて、純粋なtitle変更のみの差分に修正する
+  rm ${TMP1}
+  comm -13 ${TMP4} ${TMP3} | sort | uniq > ${TMP1}
+  TITLE_DIFF=($(cat ${TMP1}))
+
+  # 追加検知
+  if [ ${#ID_ADD_DIFF[*]} -ne 0 ]; then
+    MESSAGE=${MESSAGE}"■新しい未来記事が作成されました\r"
+    MESSAGE=${MESSAGE}"\`\`\`"
+    for i in ${ID_ADD_DIFF[@]}; do
+      M=$(grep ${i} ${2} | awk '{print $1" by "$3}')
+      MESSAGE=${MESSAGE}"${M}\r"
+    done
+    MESSAGE=${MESSAGE}"\`\`\`"
   fi
 
   # 削除検知
-  DEL_DIFF=($(
-    diff -u ${1} ${2} | grep ^- \
-                      | grep -v ^--- \
-                      | sed -e 's/^-//'
-  ))
-  if [ ${#DEL_DIFF[*]} -ne 0 ]; then
+  if [ ${#ID_DEL_DIFF[*]} -ne 0 ]; then
     MESSAGE=${MESSAGE}"■未来記事の削除を検知しました\r"
-    for i in ${DEL_DIFF[@]}; do
-      DATETIME=$(echo ${i} | awk '{print $(NF-1)}' | sed -e 's/://g' -e 's/T//g' -e 's/-//g')
-      MESSAGE=${MESSAGE}"DELETED -> ${i}\r"
+    MESSAGE=${MESSAGE}"\`\`\`"
+    for i in ${ID_DEL_DIFF[@]}; do
+      M=$(grep ${i} ${1} | awk '{print $1" by "$3}')
+      MESSAGE=${MESSAGE}"${M}\r"
+    done
+    MESSAGE=${MESSAGE}"\`\`\`"
+  fi
+
+  # タイトル変更検知
+  if [ ${#TITLE_DIFF[*]} -ne 0 ]; then
+    MESSAGE=${MESSAGE}"■未来記事の記事名変更を検知しました\r"
+    for i in ${TITLE_DIFF[@]}; do
+      MESSAGE=${MESSAGE}"\`\`\`"
+      M="- "$(grep $i ${1} | awk '{print $1}')"\r+ "$(grep $i ${2} | awk '{print $1}')
+      MESSAGE=${MESSAGE}"${M}\r"
+      MESSAGE=${MESSAGE}"\`\`\`"
     done
   fi
 
@@ -209,11 +266,11 @@ if [ $? -ne 0 ]; then
 fi
 check_data
 
-get_draft_articles ${PREV_FILE} | sort > ${TMP1}
-get_draft_articles ${RESULT_FILE} | sort > ${TMP2}
+get_draft_articles ${PREV_FILE} | sort > ${TMP_DRAFT_PREV}
+get_draft_articles ${RESULT_FILE} | sort > ${TMP_DRAFT_NOW}
 
 MESSAGE=""
-create_diff_message ${TMP1} ${TMP2}
+create_diff_message ${TMP_DRAFT_PREV} ${TMP_DRAFT_NOW}
 if [ "${MESSAGE}" != "" ]; then
   curl -H "Content-Type: application/json" -X POST -d "{\"username\": \"${BOT_NAME}\", \"content\": \"${MESSAGE}\"}" ${DISCORD_URL} >> ${LOG_FILE} 2>&1
   if [ $? -eq 0 ]; then
