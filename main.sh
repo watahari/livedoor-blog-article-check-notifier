@@ -13,7 +13,10 @@ init() {
 
   # このログファイルは無限に肥大化するので、適宜logrotateしてください
   LOG_FILE=${APP_PATH}/livedoor-blog-article-check-notifier.log
+  # 多重実行回避のためロック機構があるが、不測の事態での長期間ロック発生時に運用作業をしなければならないのは面倒.
+  # LOCK_IGNORED_SEC秒以上前のロックファイルは無視する救済措置を用意している.
   LOCK_FILE=${APP_PATH}/livedoor-blog-article-check-notifier.lock
+  LOCK_IGNORED_SEC=600
   RESULT_FILE=${APP_PATH}/result.txt
   PREV_FILE=${APP_PATH}/prev_result.txt
   TMP_PREV_FILE=${APP_PATH}/.tmp_prev_result.tmp.txt
@@ -25,8 +28,17 @@ init() {
   TMP4=${APP_PATH}/.4.tmp.txt
 
   if [ -e ${LOCK_FILE} ];then
-    log "lock found, exit"
-    exit 1
+    NOW_UT=$(date +%s)
+    LOCK_UT=$(date -r ${LOCK_FILE} '+%s')
+    LOCK_TERM_UT=$((${NOW_UT}-${LOCK_UT}))
+    # LOCK_IGNORED_SEC秒以上lockがある場合の救済措置
+    if [ ${LOCK_TERM_UT} -gt ${LOCK_IGNORED_SEC} ];then
+      log "lock found, but ${LOCK_TERM_UT} seconds heve passed. "
+      log "ignoring lock file."
+    else
+      log "lock found (${LOCK_TERM_UT}sec) exit."
+      exit 1
+    fi
   else
     touch ${LOCK_FILE}
     log "START <$$>"
