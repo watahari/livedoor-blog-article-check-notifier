@@ -177,7 +177,7 @@ get_draft_articles() {
   if [ -e ${TMP2} ]; then
     cat ${TMP2}
   else
-    printf "\r"
+    printf ""
   fi
 }
 
