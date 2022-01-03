@@ -8,6 +8,7 @@ init() {
   API_KEY="<your livedoor blog api key>"
   BLOG_NAME="<blog owner livedoor id>"
   DISCORD_URL="<your discord webhook url https://discord.com/api/webhooks/****>"
+  OPS_DISCORD_URL="<your discord webhook url for error report https://discord.com/api/webhooks/****>"
 
   BOT_NAME="下書き記事見張るくん"
 
@@ -284,10 +285,16 @@ get_draft_articles ${RESULT_FILE} | sort > ${TMP_DRAFT_NOW}
 MESSAGE=""
 create_diff_message ${TMP_DRAFT_PREV} ${TMP_DRAFT_NOW}
 if [ "${MESSAGE}" != "" ]; then
-  curl -H "Content-Type: application/json" -X POST -d "{\"username\": \"${BOT_NAME}\", \"content\": \"${MESSAGE}\"}" ${DISCORD_URL} >> ${LOG_FILE} 2>&1
-  if [ $? -eq 0 ]; then
+  OUT=$(curl -Ssf -H "Content-Type: application/json" -X POST -d "{\"username\": \"${BOT_NAME}\", \"content\": \"${MESSAGE}\"}" ${DISCORD_URL}) >> ${LOG_FILE} 2>&1
+  RET=$?
+  if [ ${RET} -eq 0 ]; then
     log "--> post discord OK"
   else
+    log "--> post discord error"
+    echo "message: ${MESSAGE}" >> ${LOG_FILE}
+    curl -s -H "Content-Type: application/json" -X POST -d "{\"username\": \"Ops_${BOT_NAME}\", \"content\": \"error occured when post discord\rcode:${RET}\"}" ${OPS_DISCORD_URL} >> ${LOG_FILE} 2>&1
+    curl -s -H "Content-Type: application/json" -X POST -d "{\"username\": \"Ops_${BOT_NAME}\", \"content\": \"${OUT}\"}" ${OPS_DISCORD_URL} >> ${LOG_FILE} 2>&1
+    log "reported to ops"
     revert_finish
   fi
 else
