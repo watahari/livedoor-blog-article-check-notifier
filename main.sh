@@ -17,6 +17,7 @@ init() {
   # LOCK_IGNORED_SEC秒以上前のロックファイルは無視する救済措置を用意している.
   LOCK_FILE=${APP_PATH}/livedoor-blog-article-check-notifier.lock
   LOCK_IGNORED_SEC=600
+  REPLACEMENT_SETTING_INI=${APP_PATH}/replacement_setting.ini
   RESULT_FILE=${APP_PATH}/result.txt
   PREV_FILE=${APP_PATH}/prev_result.txt
   TMP_PREV_FILE=${APP_PATH}/.tmp_prev_result.tmp.txt
@@ -152,6 +153,15 @@ get_draft_articles() {
            | sed -e 's/+09:00//' \
            | egrep " yes" \
            > ${TMP1}
+
+  # 置換設定を適用
+  for l in $(cat ${REPLACEMENT_SETTING_INI}); do
+    key=$(echo ${l} | cut -d'=' -f1)
+    val=$(echo ${l} | cut -d'=' -f2)
+    cat ${TMP1} | sed -e "s/${key}/${val}/g" \
+                > ${TMP2}
+    cp ${TMP2} ${TMP1}
+  done
 
   # 過去のdraftは除外する. 現在日時より過去のdraft:yesは「下書き記事」なので、日時チェックの必要がある.
   # なお、未来日時の「予約記事」と「下書き記事」は見分けられない.
