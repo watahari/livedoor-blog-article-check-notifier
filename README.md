@@ -13,6 +13,14 @@ Edit the variable at the beginning of `main.sh`.
   DISCORD_URL="<your discord webhook url https://discord.com/api/webhooks/****>"
 ```
 
+(Optional)<br>
+You can set the replacement settings to make it easier for humans to see.<br>
+Please modify the `replacement_setting.ini` file.
+```
+your_livedoor_id=human_readable_name
+abcdefg012=J.Doe
+```
+
 ## Run
 
 Operation on raspberry pi and MacOS has been confirmed.
